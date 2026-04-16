@@ -16,7 +16,11 @@ CONFIG="${CONFIG:-${REPO_ROOT}/configs/basicvsr_plusplus_reds4.py}"
 CHECKPOINT="${CHECKPOINT:-${REPO_ROOT}/chkpts/basicvsr_plusplus_reds4.pth}"
 LQ_ROOT="${LQ_ROOT:-/mnt/HDD_raid1/yjcho/data/UDM10/BIx4}"
 SAVE_DIR="${SAVE_DIR:-/mnt/HDD_raid1/yjcho/BasicVSR_PlusPlus/test_udm10}"
-FILENAME_TMPL="${FILENAME_TMPL:-{:04d}.png}"
+# Note: do not inline "{:04d}.png" inside ${VAR:-default}, bash closes the
+# parameter expansion on the first "}" and mangles the template.
+if [ -z "${FILENAME_TMPL:-}" ]; then
+    FILENAME_TMPL='{:04d}.png'
+fi
 DEVICE_ID="${DEVICE_ID:-0}"   # seen-id after CUDA_VISIBLE_DEVICES masking
 
 export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-2}"
