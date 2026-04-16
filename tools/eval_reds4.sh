@@ -13,7 +13,7 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
 SR_DIR="${SR_DIR:-/mnt/HDD_raid1/yjcho/BasicVSR_PlusPlus/test_reds}"
 GT_DIR="${GT_DIR:-/mnt/HDD_raid1/yjcho/data/REDS/test/gt}"
-METRICS="${METRICS:-PSNR SSIM LPIPS NIQE tOF tLP}"
+METRICS="${METRICS:-PSNR SSIM LPIPS NIQE tOF tLP DISTS MUSIQ}"
 LPIPS_NET="${LPIPS_NET:-alex}"
 DEVICE="${DEVICE:-cuda:0}"
 

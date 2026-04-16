@@ -1,5 +1,5 @@
 # Copyright (c) OpenMMLab. All rights reserved.
-"""Offline REDS4 evaluation: PSNR / SSIM / LPIPS / NIQE / tOF / tLP.
+"""Offline REDS4 evaluation: PSNR / SSIM / LPIPS / NIQE / tOF / tLP / DISTS / MUSIQ.
 
 Run after `tools/test_reds4.sh` has written SR outputs to disk. The script
 walks `<sr_dir>/<clip>/*.png` and matches them against `<gt_dir>/<clip>/*.png`,
@@ -11,12 +11,16 @@ Metric references:
   - tOF / tLP         : Chu et al., TecoGAN, ACM TOG 2020
       tOF = mean L2 of (flow(GT_t, GT_{t+1}) - flow(SR_t, SR_{t+1}))
       tLP = |LPIPS(GT_t, GT_{t+1}) - LPIPS(SR_t, SR_{t+1})| (x100)
+  - DISTS             : Ding et al., TPAMI 2020 (via `pyiqa`)
+  - MUSIQ             : Ke et al., ICCV 2021  (via `pyiqa`, KonIQ-10k)
+
+Install extras: pip install lpips pyiqa
 
 Example:
   python tools/eval_reds4.py \\
     --sr-dir  /mnt/HDD_raid1/yjcho/BasicVSR_PlusPlus/test_reds \\
     --gt-dir  /mnt/HDD_raid1/yjcho/data/REDS/test/gt \\
-    --metrics PSNR SSIM LPIPS NIQE tOF tLP \\
+    --metrics PSNR SSIM LPIPS NIQE tOF tLP DISTS MUSIQ \\
     --device  cuda:0
 """
 
@@ -41,7 +45,7 @@ from mmedit.core.evaluation.metrics import niqe as _niqe  # noqa: E402
 
 
 REDS4_CLIPS = ('000', '011', '015', '020')
-ALL_METRICS = ('PSNR', 'SSIM', 'LPIPS', 'NIQE', 'tOF', 'tLP')
+ALL_METRICS = ('PSNR', 'SSIM', 'LPIPS', 'NIQE', 'tOF', 'tLP', 'DISTS', 'MUSIQ')
 
 
 def parse_args():
@@ -61,8 +65,11 @@ def parse_args():
                    help='convert to Y-channel before PSNR/SSIM (default RGB)')
     p.add_argument('--lpips-net', default='alex', choices=['alex', 'vgg'],
                    help='LPIPS backbone (alex matches TecoGAN convention)')
+    p.add_argument('--musiq-variant', default='musiq',
+                   help='pyiqa MUSIQ variant: musiq (koniq), musiq-ava, '
+                        'musiq-spaq, musiq-paq2piq')
     p.add_argument('--device', default='cuda:0',
-                   help='device for LPIPS (e.g. cuda:0, cuda:2, cpu)')
+                   help='device for deep metrics (e.g. cuda:0, cuda:2, cpu)')
     return p.parse_args()
 
 
@@ -112,6 +119,14 @@ def bgr_to_lpips_tensor(img_bgr, device):
     return t.unsqueeze(0)
 
 
+def bgr_to_01_tensor(img_bgr, device):
+    """uint8 BGR HxWxC -> float RGB 1x3xHxW in [0, 1] on device (pyiqa range)."""
+    import torch
+    rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
+    t = torch.from_numpy(rgb).to(device).permute(2, 0, 1).float() / 255.0
+    return t.unsqueeze(0)
+
+
 def farneback_flow(img_bgr_a, img_bgr_b):
     ga = cv2.cvtColor(img_bgr_a, cv2.COLOR_BGR2GRAY)
     gb = cv2.cvtColor(img_bgr_b, cv2.COLOR_BGR2GRAY)
@@ -141,6 +156,25 @@ def main():
             sys.exit(1)
         lpips_model = lpips.LPIPS(net=args.lpips_net).to(args.device)
         lpips_model.eval()
+
+    need_dists = 'DISTS' in args.metrics
+    need_musiq = 'MUSIQ' in args.metrics
+    dists_model = musiq_model = None
+    if need_dists or need_musiq:
+        try:
+            import pyiqa  # noqa: F401
+            import torch
+        except ImportError:
+            print('[!] DISTS/MUSIQ requested but `pyiqa` not installed. '
+                  'Install with: pip install pyiqa')
+            sys.exit(1)
+        if need_dists:
+            dists_model = pyiqa.create_metric('dists', device=args.device)
+            dists_model.eval()
+        if need_musiq:
+            musiq_model = pyiqa.create_metric(args.musiq_variant,
+                                              device=args.device)
+            musiq_model.eval()
 
     # NIQE impl reads a relative .npz; switch cwd to repo root just in case.
     os.chdir(_REPO_ROOT)
@@ -198,6 +232,18 @@ def main():
                     if 'LPIPS' in acc:
                         d = lpips_model(sr_t, gt_t).item()
                         acc['LPIPS'].append(d)
+
+            if need_dists or need_musiq:
+                import torch
+                with torch.no_grad():
+                    sr_01 = bgr_to_01_tensor(sr, args.device)
+                    if 'DISTS' in acc:
+                        gt_01 = bgr_to_01_tensor(gt, args.device)
+                        acc['DISTS'].append(float(
+                            dists_model(sr_01, gt_01).item()))
+                    if 'MUSIQ' in acc:
+                        acc['MUSIQ'].append(float(
+                            musiq_model(sr_01).item()))
 
             if idx > 0:
                 if 'tOF' in acc:
