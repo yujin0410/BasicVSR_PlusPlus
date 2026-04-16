@@ -1,5 +1,5 @@
 # Copyright (c) OpenMMLab. All rights reserved.
-"""Offline REDS4 evaluation: PSNR / SSIM / LPIPS / NIQE / tOF / tLP / DISTS / MUSIQ.
+"""Offline REDS4 evaluation: PSNR / SSIM / LPIPS / NIQE / tOF / tLP / DISTS / MUSIQ / CLIPIQA.
 
 Run after `tools/test_reds4.sh` has written SR outputs to disk. The script
 walks `<sr_dir>/<clip>/*.png` and matches them against `<gt_dir>/<clip>/*.png`,
@@ -13,6 +13,7 @@ Metric references:
       tLP = |LPIPS(GT_t, GT_{t+1}) - LPIPS(SR_t, SR_{t+1})| (x100)
   - DISTS             : Ding et al., TPAMI 2020 (via `pyiqa`)
   - MUSIQ             : Ke et al., ICCV 2021  (via `pyiqa`, KonIQ-10k)
+  - CLIPIQA           : Wang et al., AAAI 2023 (via `pyiqa`, CLIP-IQA)
 
 Install extras: pip install lpips pyiqa
 
@@ -20,7 +21,7 @@ Example:
   python tools/eval_reds4.py \\
     --sr-dir  /mnt/HDD_raid1/yjcho/BasicVSR_PlusPlus/test_reds \\
     --gt-dir  /mnt/HDD_raid1/yjcho/data/REDS/test/gt \\
-    --metrics PSNR SSIM LPIPS NIQE tOF tLP DISTS MUSIQ \\
+    --metrics PSNR SSIM LPIPS NIQE tOF tLP DISTS MUSIQ CLIPIQA \\
     --device  cuda:0
 """
 
@@ -45,7 +46,8 @@ from mmedit.core.evaluation.metrics import niqe as _niqe  # noqa: E402
 
 
 REDS4_CLIPS = ('000', '011', '015', '020')
-ALL_METRICS = ('PSNR', 'SSIM', 'LPIPS', 'NIQE', 'tOF', 'tLP', 'DISTS', 'MUSIQ')
+ALL_METRICS = ('PSNR', 'SSIM', 'LPIPS', 'NIQE', 'tOF', 'tLP',
+               'DISTS', 'MUSIQ', 'CLIPIQA')
 
 
 def parse_args():
@@ -68,6 +70,9 @@ def parse_args():
     p.add_argument('--musiq-variant', default='musiq',
                    help='pyiqa MUSIQ variant: musiq (koniq), musiq-ava, '
                         'musiq-spaq, musiq-paq2piq')
+    p.add_argument('--clipiqa-variant', default='clipiqa',
+                   help='pyiqa CLIP-IQA variant: clipiqa, clipiqa+, '
+                        'clipiqa+_rn50_512, clipiqa+_vitL14_512')
     p.add_argument('--device', default='cuda:0',
                    help='device for deep metrics (e.g. cuda:0, cuda:2, cpu)')
     return p.parse_args()
@@ -159,13 +164,14 @@ def main():
 
     need_dists = 'DISTS' in args.metrics
     need_musiq = 'MUSIQ' in args.metrics
-    dists_model = musiq_model = None
-    if need_dists or need_musiq:
+    need_clipiqa = 'CLIPIQA' in args.metrics
+    dists_model = musiq_model = clipiqa_model = None
+    if need_dists or need_musiq or need_clipiqa:
         try:
             import pyiqa  # noqa: F401
             import torch
         except ImportError:
-            print('[!] DISTS/MUSIQ requested but `pyiqa` not installed. '
+            print('[!] DISTS/MUSIQ/CLIPIQA requested but `pyiqa` not installed. '
                   'Install with: pip install pyiqa')
             sys.exit(1)
         if need_dists:
@@ -175,6 +181,10 @@ def main():
             musiq_model = pyiqa.create_metric(args.musiq_variant,
                                               device=args.device)
             musiq_model.eval()
+        if need_clipiqa:
+            clipiqa_model = pyiqa.create_metric(args.clipiqa_variant,
+                                                device=args.device)
+            clipiqa_model.eval()
 
     # NIQE impl reads a relative .npz; switch cwd to repo root just in case.
     os.chdir(_REPO_ROOT)
@@ -233,7 +243,7 @@ def main():
                         d = lpips_model(sr_t, gt_t).item()
                         acc['LPIPS'].append(d)
 
-            if need_dists or need_musiq:
+            if need_dists or need_musiq or need_clipiqa:
                 import torch
                 with torch.no_grad():
                     sr_01 = bgr_to_01_tensor(sr, args.device)
@@ -244,6 +254,9 @@ def main():
                     if 'MUSIQ' in acc:
                         acc['MUSIQ'].append(float(
                             musiq_model(sr_01).item()))
+                    if 'CLIPIQA' in acc:
+                        acc['CLIPIQA'].append(float(
+                            clipiqa_model(sr_01).item()))
 
             if idx > 0:
                 if 'tOF' in acc:
