@@ -20,11 +20,14 @@ LQ_DIR="${LQ_DIR:-/mnt/HDD_raid1/yjcho/data/REDS/test/bicubic}"
 GT_DIR="${GT_DIR:-/mnt/HDD_raid1/yjcho/data/REDS/test/gt}"
 SAVE_DIR="${SAVE_DIR:-/mnt/HDD_raid1/yjcho/BasicVSR_PlusPlus/test_reds}"
 
-echo "[test_reds4] CONFIG     : ${CONFIG}"
-echo "[test_reds4] CHECKPOINT : ${CHECKPOINT}"
-echo "[test_reds4] LQ_DIR     : ${LQ_DIR}"
-echo "[test_reds4] GT_DIR     : ${GT_DIR}"
-echo "[test_reds4] SAVE_DIR   : ${SAVE_DIR}"
+export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-2}"
+
+echo "[test_reds4] CUDA_VISIBLE_DEVICES : ${CUDA_VISIBLE_DEVICES}"
+echo "[test_reds4] CONFIG               : ${CONFIG}"
+echo "[test_reds4] CHECKPOINT           : ${CHECKPOINT}"
+echo "[test_reds4] LQ_DIR               : ${LQ_DIR}"
+echo "[test_reds4] GT_DIR               : ${GT_DIR}"
+echo "[test_reds4] SAVE_DIR             : ${SAVE_DIR}"
 
 mkdir -p "${SAVE_DIR}"
 
