@@ -10,7 +10,7 @@
 #   - PSNR printed to stdout (Eval-PSNR: xx.xx)
 #   - Super-resolved frames written under SAVE_DIR/{000,011,015,020}/
 
-set -euo pipefail
+set -eu
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
