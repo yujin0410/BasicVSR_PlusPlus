@@ -91,9 +91,15 @@ def restoration_video_inference(model,
 
         # prepare data
         sequence_length = len(glob.glob(osp.join(img_dir, '*')))
-        img_dir_split = re.split(r'[\\/]', img_dir)
-        key = img_dir_split[-1]
-        lq_folder = reduce(osp.join, img_dir_split[:-1])
+        # NOTE: the previous implementation did
+        #   reduce(osp.join, re.split(r'[\\/]', img_dir)[:-1])
+        # which silently drops the leading '/' of absolute paths
+        # (reduce starts with '' and osp.join('', 'mnt') -> 'mnt').
+        # Use os.path.dirname/basename instead, which preserves absolute
+        # paths and handles trailing separators.
+        img_dir_clean = img_dir.rstrip('/\\')
+        key = osp.basename(img_dir_clean)
+        lq_folder = osp.dirname(img_dir_clean)
         data = dict(
             lq_path=lq_folder,
             gt_path='',
