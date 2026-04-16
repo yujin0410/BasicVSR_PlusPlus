@@ -37,6 +37,8 @@ python "${REPO_ROOT}/tools/test.py" \
     "${CHECKPOINT}" \
     --save-path "${SAVE_DIR}" \
     --cfg-options \
+        test_cfg.metrics="[PSNR,SSIM]" \
+        test_cfg.crop_border=0 \
         data.test.type=SRREDSMultipleGTDataset \
         data.test.lq_folder="${LQ_DIR}" \
         data.test.gt_folder="${GT_DIR}" \
